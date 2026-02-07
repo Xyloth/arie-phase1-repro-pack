@@ -99,7 +99,7 @@ def main() -> None:
         f"with inner n_splits={args.calib_splits}"
     )
     print("- models: log_reg, hist_gb")
-    print("- calibration methods: sigmoid, isotonic")
+    print("- calibration methods: none, sigmoid, isotonic")
 
     results = evaluate_calibration_grid(
         seeds=seeds,
@@ -119,15 +119,16 @@ def main() -> None:
         print(f"- model: {choice['model']}")
         print(f"- calibration: {choice['calibration']}")
         print(f"- criteria: {choice['criteria']}")
-        if results.get("default_uncalibrated"):
-            uncal = results["default_uncalibrated"]["summary"]
-            cal = results["default_calibrated"]["summary"] if results.get("default_calibrated") else None
+        if results.get("default_selected"):
+            sel = results["default_selected"]["summary"]
             print(
-                f"- calibrated balanced_accuracy: {cal['balanced_accuracy']['mean']:.4f} "
-                f"(std {cal['balanced_accuracy']['std']:.4f})"
+                f"- selected balanced_accuracy: {sel['balanced_accuracy']['mean']:.4f} "
+                f"(std {sel['balanced_accuracy']['std']:.4f})"
             )
+        if results.get("default_uncalibrated_reference"):
+            uncal = results["default_uncalibrated_reference"]["summary"]
             print(
-                f"- uncalibrated balanced_accuracy: {uncal['balanced_accuracy']['mean']:.4f} "
+                f"- uncalibrated reference balanced_accuracy: {uncal['balanced_accuracy']['mean']:.4f} "
                 f"(std {uncal['balanced_accuracy']['std']:.4f})"
             )
 

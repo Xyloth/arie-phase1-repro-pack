@@ -245,7 +245,7 @@ def evaluate_calibration_grid(
         "columns": list(df.columns),
     }
 
-    calibration_methods = calibration_methods or ["sigmoid", "isotonic"]
+    calibration_methods = calibration_methods or ["none", "sigmoid", "isotonic"]
 
     split_map, split_diagnostics = _build_splits(
         X,
@@ -354,22 +354,27 @@ def evaluate_calibration_grid(
                     base_model = _build_pipeline(model, dense_output=model_cfg["dense_output"])
                     base_model.fit(X_train, y_train)
 
-                    with warnings.catch_warnings():
-                        warnings.filterwarnings(
-                            "ignore",
-                            message="The `cv='prefit'` option is deprecated",
-                            category=FutureWarning,
-                        )
-                        calibrator = CalibratedClassifierCV(
-                            estimator=base_model,
-                            method=method,
-                            cv="prefit",
-                        )
-                        calibrator.fit(X_calib, y_calib)
+                    if method == "none":
+                        probs = base_model.predict_proba(X_test)
+                        y_pred = base_model.predict(X_test)
+                        classes = base_model.named_steps["model"].classes_
+                    else:
+                        with warnings.catch_warnings():
+                            warnings.filterwarnings(
+                                "ignore",
+                                message="The `cv='prefit'` option is deprecated",
+                                category=FutureWarning,
+                            )
+                            calibrator = CalibratedClassifierCV(
+                                estimator=base_model,
+                                method=method,
+                                cv="prefit",
+                            )
+                            calibrator.fit(X_calib, y_calib)
 
-                    probs = calibrator.predict_proba(X_test)
-                    y_pred = calibrator.predict(X_test)
-                    classes = calibrator.classes_
+                        probs = calibrator.predict_proba(X_test)
+                        y_pred = calibrator.predict(X_test)
+                        classes = calibrator.classes_
 
                     metrics = {
                         "balanced_accuracy": float(balanced_accuracy_score(y_test, y_pred)),
@@ -472,17 +477,18 @@ def evaluate_calibration_grid(
 
     predictions_path = None
     prediction_columns = None
-    calibrated_default = None
-    uncalibrated_default = None
+    default_selected = None
+    default_uncalibrated_reference = None
 
     if default_choice is not None:
         default_key = f"{default_choice['model']}__{default_choice['calibration']}"
         if combo_results.get(default_key, {}).get("status") != "OK":
             raise RuntimeError("Default choice not available for prediction output.")
 
-        calibrated_default = {
+        default_selected = {
             "per_seed": combo_results[default_key]["per_seed"],
             "summary": combo_results[default_key]["summary"],
+            "method": default_choice["calibration"],
         }
 
         uncalibrated_per_seed = []
@@ -516,22 +522,27 @@ def evaluate_calibration_grid(
                 base_pred = base_model.predict(X_test)
                 base_classes = list(base_model.named_steps["model"].classes_)
 
-                with warnings.catch_warnings():
-                    warnings.filterwarnings(
-                        "ignore",
-                        message="The `cv='prefit'` option is deprecated",
-                        category=FutureWarning,
-                    )
-                    calibrator = CalibratedClassifierCV(
-                        estimator=base_model,
-                        method=default_choice["calibration"],
-                        cv="prefit",
-                    )
-                    calibrator.fit(X_calib, y_calib)
+                if default_choice["calibration"] == "none":
+                    probs = base_probs
+                    y_pred = base_pred
+                    classes = list(base_classes)
+                else:
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings(
+                            "ignore",
+                            message="The `cv='prefit'` option is deprecated",
+                            category=FutureWarning,
+                        )
+                        calibrator = CalibratedClassifierCV(
+                            estimator=base_model,
+                            method=default_choice["calibration"],
+                            cv="prefit",
+                        )
+                        calibrator.fit(X_calib, y_calib)
 
-                probs = calibrator.predict_proba(X_test)
-                y_pred = calibrator.predict(X_test)
-                classes = list(calibrator.classes_)
+                    probs = calibrator.predict_proba(X_test)
+                    y_pred = calibrator.predict(X_test)
+                    classes = list(calibrator.classes_)
 
                 if classes_ref is None:
                     classes_ref = classes
@@ -604,7 +615,7 @@ def evaluate_calibration_grid(
                 "std": float(np.std(values, ddof=1)) if len(values) > 1 else 0.0,
             }
 
-        uncalibrated_default = {
+        default_uncalibrated_reference = {
             "per_seed": uncalibrated_per_seed,
             "summary": overall_summary,
         }
@@ -624,8 +635,8 @@ def evaluate_calibration_grid(
         "split_diagnostics": split_diagnostics,
         "comparison_table": comparison_table,
         "default_choice": default_choice,
-        "default_calibrated": calibrated_default,
-        "default_uncalibrated": uncalibrated_default,
+        "default_selected": default_selected,
+        "default_uncalibrated_reference": default_uncalibrated_reference,
         "predictions_path": str(predictions_path) if predictions_path else None,
         "prediction_columns": prediction_columns,
         "combos": combo_results,
