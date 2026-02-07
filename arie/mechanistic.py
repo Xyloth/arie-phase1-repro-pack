@@ -292,10 +292,16 @@ def process_mechanistic_data(
         drug_name_normalized=("drug_name_normalized", lambda x: x.mode().iloc[0] if not x.mode().empty else x.iloc[0]),
         herg_ic50_uM_mean=("ic50_uM", "mean"),
         herg_ic50_uM_std=("ic50_uM", "std"),
+        herg_ic50_uM_median=("ic50_uM", "median"),
         herg_ic50_uM_min=("ic50_uM", "min"),
         herg_ic50_uM_max=("ic50_uM", "max"),
+        herg_ic50_uM_count=("ic50_uM", "count"),
         herg_nh_mean=("nh", "mean"),
         herg_nh_std=("nh", "std"),
+        herg_nh_median=("nh", "median"),
+        herg_nh_min=("nh", "min"),
+        herg_nh_max=("nh", "max"),
+        herg_nh_count=("nh", "count"),
         labs_n=("lab", "nunique"),
     ).reset_index()
     processed = processed.rename(columns={"drug_name_parent": "drug_name_parent"})
@@ -306,10 +312,16 @@ def process_mechanistic_data(
         "drug_name_parent",
         "herg_ic50_uM_mean",
         "herg_ic50_uM_std",
+        "herg_ic50_uM_median",
         "herg_ic50_uM_min",
         "herg_ic50_uM_max",
+        "herg_ic50_uM_count",
         "herg_nh_mean",
         "herg_nh_std",
+        "herg_nh_median",
+        "herg_nh_min",
+        "herg_nh_max",
+        "herg_nh_count",
         "labs_n",
         "mechanistic_source",
     ]
@@ -338,16 +350,30 @@ within each `concentration-inhibition.xlsx` file (per lab, per drug).
 
 Unit of observation: one row per drug (aggregated across labs).
 
+Normalization:
+- Parent compound names are produced by shared normalization rules (casefold + punctuation removal + salt stripping).
+- Alias rules (applied after normalization) handle obvious typos and stereochemistry variants:
+  - diltizem -> diltiazem
+  - dlsotalol -> sotalol (supported by ChEMBL synonym "DL-SOTALOL")
+
 Columns:
 - drug_name_raw: Drug name as reported in the OSF tables (mode across labs).
 - drug_name_normalized: Normalized drug name (casefolded, alphanumeric only) used for joins.
+- drug_name_parent: Normalized name with salt/counter-ion tokens removed (plus alias rules).
 - herg_ic50_uM_mean: Mean IC50 in µM across labs.
 - herg_ic50_uM_std: Standard deviation of IC50 in µM across labs.
+- herg_ic50_uM_median: Median IC50 in µM across labs.
 - herg_ic50_uM_min: Minimum IC50 in µM across labs.
 - herg_ic50_uM_max: Maximum IC50 in µM across labs.
+- herg_ic50_uM_count: Count of non-null IC50 values used for aggregation.
 - herg_nh_mean: Mean Hill coefficient across labs.
 - herg_nh_std: Standard deviation of Hill coefficient across labs.
+- herg_nh_median: Median Hill coefficient across labs.
+- herg_nh_min: Minimum Hill coefficient across labs.
+- herg_nh_max: Maximum Hill coefficient across labs.
+- herg_nh_count: Count of non-null Hill coefficient values used for aggregation.
 - labs_n: Number of labs contributing data for the drug.
+- mechanistic_source: Source label for the row ("OSF" or "ChEMBL" when gap-fill is enabled).
 """.lstrip(),
         encoding="utf-8",
     )
@@ -377,6 +403,7 @@ def _apply_chembl_gapfill(
         "drug_name_normalized",
         "ic50_uM_mean",
         "ic50_uM_std",
+        "ic50_uM_median",
         "ic50_uM_min",
         "ic50_uM_max",
         "n_activities",
@@ -402,10 +429,16 @@ def _apply_chembl_gapfill(
             "drug_name_parent": gapfill["drug_name_parent"],
             "herg_ic50_uM_mean": gapfill["ic50_uM_mean"],
             "herg_ic50_uM_std": gapfill["ic50_uM_std"],
+            "herg_ic50_uM_median": gapfill["ic50_uM_median"],
             "herg_ic50_uM_min": gapfill["ic50_uM_min"],
             "herg_ic50_uM_max": gapfill["ic50_uM_max"],
+            "herg_ic50_uM_count": gapfill["n_activities"],
             "herg_nh_mean": np.nan,
             "herg_nh_std": np.nan,
+            "herg_nh_median": np.nan,
+            "herg_nh_min": np.nan,
+            "herg_nh_max": np.nan,
+            "herg_nh_count": 0,
             "labs_n": gapfill["n_activities"],
             "mechanistic_source": "ChEMBL",
         }
