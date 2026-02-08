@@ -6,3 +6,6 @@ results/
 figures/
 *.egg-info/
 .DS_Store
+
+# Local research PDFs (do not commit)
+*.pdf

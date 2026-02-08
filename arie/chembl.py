@@ -24,13 +24,15 @@ def get_release_info() -> dict:
     return _get_json(f"{CHEMBL_BASE}/status", params={"format": "json"})
 
 
-def _match_name(candidate_name: str, query_parent: str) -> bool:
-    parent = normalize_compound(candidate_name).get("drug_name_parent")
+def _match_name(candidate_name: str, query_parent: str, enable_identity_alias: bool = False) -> bool:
+    parent = normalize_compound(candidate_name, enable_identity_alias=enable_identity_alias).get(
+        "drug_name_parent"
+    )
     return parent == query_parent
 
 
-def resolve_compound(query_name: str) -> Optional[dict]:
-    query_norm = normalize_compound(query_name)
+def resolve_compound(query_name: str, enable_identity_alias: bool = False) -> Optional[dict]:
+    query_norm = normalize_compound(query_name, enable_identity_alias=enable_identity_alias)
     query_parent = query_norm["drug_name_parent"]
 
     payload = _get_json(
@@ -42,7 +44,7 @@ def resolve_compound(query_name: str) -> Optional[dict]:
     # Prefer exact parent match on pref_name.
     for cand in candidates:
         pref = cand.get("pref_name") or ""
-        if pref and _match_name(pref, query_parent):
+        if pref and _match_name(pref, query_parent, enable_identity_alias=enable_identity_alias):
             return {
                 "query_name": query_name,
                 "query_parent": query_parent,
@@ -56,7 +58,7 @@ def resolve_compound(query_name: str) -> Optional[dict]:
     for cand in candidates:
         for syn in cand.get("molecule_synonyms", []) or []:
             syn_name = syn.get("molecule_synonym") or syn.get("synonyms") or ""
-            if syn_name and _match_name(syn_name, query_parent):
+            if syn_name and _match_name(syn_name, query_parent, enable_identity_alias=enable_identity_alias):
                 return {
                     "query_name": query_name,
                     "query_parent": query_parent,
