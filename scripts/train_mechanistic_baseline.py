@@ -66,6 +66,11 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Rebuild mechanistic features even if present.",
     )
+    parser.add_argument(
+        "--enable-identity-alias",
+        action="store_true",
+        help="Enable identity-changing aliases when joining (default: off).",
+    )
     return parser.parse_args()
 
 
@@ -96,18 +101,27 @@ def main() -> None:
     else:
         print(f"Wrote mechanistic feature table to {features_path}.")
 
-    join_summary = summarize_mechanistic_feature_join()
+    join_summary = summarize_mechanistic_feature_join(enable_identity_alias=args.enable_identity_alias)
     print("\nJoin summary")
     print(f"- CiPA rows: {join_summary['cipa_rows']}")
     print(f"- CiPA unique parent drugs: {join_summary['cipa_unique_drugs_parent']}")
     print(f"- Mechanistic parent drugs: {join_summary['mechanistic_unique_drugs_parent']}")
-    print(f"- Matched parent drugs: {join_summary['matched_drugs_parent']}")
+    print(
+        f"- Matched parent drugs: {join_summary['matched_drugs_parent']} "
+        f"(rate {join_summary['match_rate_parent']:.3f})"
+    )
+    print(
+        "- Matched parent drugs (identity alias): "
+        f"{join_summary['matched_drugs_parent_identity']} "
+        f"(rate {join_summary['match_rate_parent_identity']:.3f})"
+    )
     print(f"- Missing rate (IC50 mean): {join_summary['missing_rate_ic50_mean']:.3f}")
     print(f"- Missing rate (nH mean): {join_summary['missing_rate_nh_mean']:.3f}")
+    print(f"- Identity alias enabled: {args.enable_identity_alias}")
 
     cipa = load_processed_dataset().dropna(subset=["risk_class"]).copy()
     cipa["drug_name_parent"] = cipa["drug_name"].apply(
-        lambda x: normalize_compound(x)["drug_name_parent"]
+        lambda x: normalize_compound(x, enable_identity_alias=args.enable_identity_alias)["drug_name_parent"]
     )
 
     drug_rows = []

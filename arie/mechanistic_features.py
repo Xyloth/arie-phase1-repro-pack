@@ -140,6 +140,7 @@ def summarize_mechanistic_feature_join(
     cipa_processed_path: Path | None = None,
     features_path: Path | None = None,
     output_path: Path | None = None,
+    enable_identity_alias: bool = False,
 ) -> dict:
     """Join CiPA processed data with mechanistic features and report match rates."""
     output_path = output_path or JOIN_SUMMARY_PATH
@@ -147,7 +148,10 @@ def summarize_mechanistic_feature_join(
     cipa = load_processed_dataset(cipa_processed_path)
     cipa = cipa.copy()
     cipa["drug_name_parent"] = cipa["drug_name"].apply(
-        lambda x: normalize_compound(x)["drug_name_parent"]
+        lambda x: normalize_compound(x, enable_identity_alias=False)["drug_name_parent"]
+    )
+    cipa["drug_name_parent_identity"] = cipa["drug_name"].apply(
+        lambda x: normalize_compound(x, enable_identity_alias=True)["drug_name_parent"]
     )
 
     features = load_mechanistic_feature_table(features_path)
@@ -158,16 +162,33 @@ def summarize_mechanistic_feature_join(
     mech_parent = sorted(features["drug_name_parent"].unique())
     matched_parent = sorted(set(cipa_parent).intersection(set(mech_parent)))
 
+    cipa_parent_identity = sorted(cipa["drug_name_parent_identity"].unique())
+    mech_parent_identity = sorted(
+        {
+            normalize_compound(name, enable_identity_alias=True)["drug_name_parent"]
+            for name in features["drug_name_parent"]
+        }
+    )
+    matched_parent_identity = sorted(set(cipa_parent_identity).intersection(set(mech_parent_identity)))
+
     def _missing_rate(column: str) -> float:
         return float(merged[column].isna().mean()) if column in merged.columns else float("nan")
 
     summary = {
+        "identity_alias_enabled": bool(enable_identity_alias),
         "cipa_rows": int(len(cipa)),
         "cipa_unique_drugs_parent": int(len(cipa_parent)),
         "mechanistic_unique_drugs_parent": int(len(mech_parent)),
         "matched_drugs_parent": int(len(matched_parent)),
+        "match_rate_parent": float(len(matched_parent) / len(cipa_parent)) if cipa_parent else 0.0,
         "missing_rate_ic50_mean": _missing_rate("herg_ic50_uM_mean"),
         "missing_rate_nh_mean": _missing_rate("herg_nh_mean"),
+        "cipa_unique_drugs_parent_identity": int(len(cipa_parent_identity)),
+        "mechanistic_unique_drugs_parent_identity": int(len(mech_parent_identity)),
+        "matched_drugs_parent_identity": int(len(matched_parent_identity)),
+        "match_rate_parent_identity": float(len(matched_parent_identity) / len(cipa_parent_identity))
+        if cipa_parent_identity
+        else 0.0,
         "features_path": str(features_path or FEATURES_PATH),
         "mechanistic_processed_path": str(MECH_PROCESSED_PATH),
         "mechanistic_features_sha256": _sha256_file(features_path or FEATURES_PATH)

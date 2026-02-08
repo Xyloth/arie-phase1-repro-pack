@@ -236,6 +236,7 @@ def process_mechanistic_data(
     include_chembl_gapfill: bool = False,
     chembl_gapfill_path: Path | None = None,
     cipa_processed_path: Path | None = None,
+    enable_identity_alias: bool = False,
 ) -> Tuple[Path, bool]:
     """Process OSF concentration-inhibition tables into a canonical mechanistic table."""
     if PROCESSED_PATH.exists() and not force:
@@ -266,11 +267,14 @@ def process_mechanistic_data(
             nh = row.get("nh")
             ic50_uM = _convert_to_um(ic50, unit)
 
+            norm = normalize_compound(drug_raw, enable_identity_alias=enable_identity_alias)
             rows.append(
                 {
                     "lab": lab,
                     "phase": phase,
-                    **normalize_compound(drug_raw),
+                    "drug_name_raw": norm["drug_name_raw"],
+                    "drug_name_normalized": norm["drug_name_normalized"],
+                    "drug_name_parent": norm["drug_name_parent"],
                     "ic50": ic50,
                     "ic50_unit": unit,
                     "ic50_uM": ic50_uM,
@@ -334,6 +338,7 @@ def process_mechanistic_data(
                 processed,
                 gapfill_path=gapfill_path,
                 cipa_processed_path=cipa_processed_path,
+                enable_identity_alias=enable_identity_alias,
             )
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
@@ -350,11 +355,13 @@ within each `concentration-inhibition.xlsx` file (per lab, per drug).
 
 Unit of observation: one row per drug (aggregated across labs).
 
+Identity alias enabled: {enable_identity_alias}
+
 Normalization:
 - Parent compound names are produced by shared normalization rules (casefold + punctuation removal + salt stripping).
-- Alias rules (applied after normalization) handle obvious typos and stereochemistry variants:
-  - diltizem -> diltiazem
-  - dlsotalol -> sotalol (supported by ChEMBL synonym "DL-SOTALOL")
+- Typo aliases (always on): diltizem -> diltiazem.
+- Identity-changing aliases are disabled by default and require explicit enablement:
+  - dlsotalol -> sotalol (supported by ChEMBL synonym "DL-SOTALOL").
 
 Columns:
 - drug_name_raw: Drug name as reported in the OSF tables (mode across labs).
@@ -395,6 +402,7 @@ def _apply_chembl_gapfill(
     osf_df: pd.DataFrame,
     gapfill_path: Path,
     cipa_processed_path: Path | None = None,
+    enable_identity_alias: bool = False,
 ) -> pd.DataFrame:
     gapfill = pd.read_csv(gapfill_path)
     required = {
@@ -413,7 +421,12 @@ def _apply_chembl_gapfill(
         raise ValueError(f"ChEMBL gapfill missing columns: {sorted(missing)}")
 
     cipa = load_processed_dataset(cipa_processed_path)
-    cipa_parents = sorted({normalize_compound(name)["drug_name_parent"] for name in cipa["drug_name"]})
+    cipa_parents = sorted(
+        {
+            normalize_compound(name, enable_identity_alias=enable_identity_alias)["drug_name_parent"]
+            for name in cipa["drug_name"]
+        }
+    )
     osf_parents = set(osf_df["drug_name_parent"].tolist())
     missing_parents = sorted(set(cipa_parents).difference(osf_parents))
 
@@ -452,6 +465,7 @@ def summarize_mechanistic_join(
     processed_path: Path | None = None,
     mechanistic_path: Path | None = None,
     output_path: Path | None = None,
+    enable_identity_alias: bool = False,
 ) -> dict:
     """Join CiPA processed data with mechanistic features and report match rate."""
     output_path = output_path or JOIN_SUMMARY_PATH
@@ -462,17 +476,59 @@ def summarize_mechanistic_join(
     cipa_unique = sorted(cipa["drug_name"].dropna().astype("string").unique())
     mech_unique = sorted(mech["drug_name_raw"].dropna().astype("string").unique())
 
-    cipa_norm = sorted({normalize_compound(name)["drug_name_normalized"] for name in cipa_unique})
-    mech_norm = sorted({normalize_compound(name)["drug_name_normalized"] for name in mech_unique})
+    cipa_norm = sorted(
+        {
+            normalize_compound(name, enable_identity_alias=False)["drug_name_normalized"]
+            for name in cipa_unique
+        }
+    )
+    mech_norm = sorted(
+        {
+            normalize_compound(name, enable_identity_alias=False)["drug_name_normalized"]
+            for name in mech_unique
+        }
+    )
 
-    cipa_parent = sorted({normalize_compound(name)["drug_name_parent"] for name in cipa_unique})
-    mech_parent = sorted({normalize_compound(name)["drug_name_parent"] for name in mech_unique})
+    cipa_parent = sorted(
+        {
+            normalize_compound(name, enable_identity_alias=False)["drug_name_parent"]
+            for name in cipa_unique
+        }
+    )
+    mech_parent = sorted(
+        {
+            normalize_compound(name, enable_identity_alias=False)["drug_name_parent"]
+            for name in mech_unique
+        }
+    )
+
+    cipa_parent_identity = sorted(
+        {
+            normalize_compound(name, enable_identity_alias=True)["drug_name_parent"]
+            for name in cipa_unique
+        }
+    )
+    mech_parent_identity = sorted(
+        {
+            normalize_compound(name, enable_identity_alias=True)["drug_name_parent"]
+            for name in mech_unique
+        }
+    )
 
     matched_parent = sorted(set(cipa_parent).intersection(set(mech_parent)))
     unmatched_cipa_parent = sorted(set(cipa_parent).difference(set(mech_parent)))
     unmatched_mech_parent = sorted(set(mech_parent).difference(set(cipa_parent)))
 
+    matched_parent_identity = sorted(set(cipa_parent_identity).intersection(set(mech_parent_identity)))
+    unmatched_cipa_parent_identity = sorted(
+        set(cipa_parent_identity).difference(set(mech_parent_identity))
+    )
+    unmatched_mech_parent_identity = sorted(
+        set(mech_parent_identity).difference(set(cipa_parent_identity))
+    )
+
     summary = {
+        "identity_alias_enabled": bool(enable_identity_alias),
         "cipa_unique_drugs": int(len(cipa_unique)),
         "mechanistic_unique_drugs": int(len(mech_unique)),
         "cipa_unique_drugs_normalized": int(len(cipa_norm)),
@@ -485,6 +541,12 @@ def summarize_mechanistic_join(
         "mechanistic_unique_drugs_parent": int(len(mech_parent)),
         "matched_drugs_parent": int(len(matched_parent)),
         "match_rate_parent": float(len(matched_parent) / len(cipa_parent)) if cipa_parent else 0.0,
+        "cipa_unique_drugs_parent_identity": int(len(cipa_parent_identity)),
+        "mechanistic_unique_drugs_parent_identity": int(len(mech_parent_identity)),
+        "matched_drugs_parent_identity": int(len(matched_parent_identity)),
+        "match_rate_parent_identity": float(len(matched_parent_identity) / len(cipa_parent_identity))
+        if cipa_parent_identity
+        else 0.0,
         "cipa_drug_list_raw": cipa_unique,
         "mechanistic_drug_list_raw": mech_unique,
         "cipa_drug_list_normalized": cipa_norm,
@@ -493,6 +555,10 @@ def summarize_mechanistic_join(
         "mechanistic_drug_list_parent": mech_parent,
         "unmatched_cipa_drugs_parent": unmatched_cipa_parent,
         "unmatched_mechanistic_drugs_parent": unmatched_mech_parent,
+        "cipa_drug_list_parent_identity": cipa_parent_identity,
+        "mechanistic_drug_list_parent_identity": mech_parent_identity,
+        "unmatched_cipa_drugs_parent_identity": unmatched_cipa_parent_identity,
+        "unmatched_mechanistic_drugs_parent_identity": unmatched_mech_parent_identity,
     }
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

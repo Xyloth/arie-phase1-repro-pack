@@ -26,6 +26,11 @@ def _parse_args() -> argparse.Namespace:
         default=None,
         help="Path to ChEMBL gap-fill CSV (default: results/chembl_gapfill_herg_multilab_2025.csv).",
     )
+    parser.add_argument(
+        "--enable-identity-alias",
+        action="store_true",
+        help="Enable identity-changing aliases (default: off).",
+    )
     return parser.parse_args()
 
 
@@ -35,7 +40,9 @@ def main() -> None:
         force=args.force,
         include_chembl_gapfill=args.include_chembl,
         chembl_gapfill_path=args.chembl_gapfill_path,
+        enable_identity_alias=args.enable_identity_alias,
     )
+    print(f"Identity alias enabled: {args.enable_identity_alias}")
     if skipped:
         print(f"Found existing processed file at {path}. Skipping processing.")
     else:
