@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Tuple
+from typing import List, Tuple
 
 import pandas as pd
 import requests
@@ -96,6 +97,26 @@ def _standardize_strings(series: pd.Series) -> pd.Series:
     return series.astype("string").str.strip()
 
 
+def _find_concentration_unit_hints(path: Path, max_hits: int = 3) -> List[dict]:
+    pattern = re.compile(r"(?:µM|\buM\b|micromolar|micro mol|microM)", re.IGNORECASE)
+    hits: List[dict] = []
+    excel = pd.ExcelFile(path)
+    for sheet in excel.sheet_names:
+        df = excel.parse(sheet, nrows=50, dtype=str)
+        for col in df.columns:
+            if pattern.search(str(col)):
+                hits.append({"sheet": sheet, "location": "column", "text": str(col)})
+                if len(hits) >= max_hits:
+                    return hits
+        for col in df.columns:
+            series = df[col].astype("string")
+            match = series[series.str.contains(pattern, na=False)]
+            if not match.empty:
+                hits.append({"sheet": sheet, "location": f"value in {col}", "text": str(match.iloc[0])})
+                if len(hits) >= max_hits:
+                    return hits
+    return hits
+
 def process_cipa_blinova(force: bool = False) -> Tuple[Path, bool]:
     """Process the CiPA Blinova 2018 dataset into a clean CSV.
 
@@ -134,6 +155,14 @@ def process_cipa_blinova(force: bool = False) -> Tuple[Path, bool]:
     df["dd_fpdc"] = pd.to_numeric(df["dd_fpdc"], errors="coerce")
     df["site"] = pd.to_numeric(df["site"], errors="coerce").astype("Int64")
 
+    unit_hints = _find_concentration_unit_hints(TARGET)
+    if unit_hints:
+        print("Unit evidence found for concentration:")
+        for hint in unit_hints:
+            print(f"- sheet={hint['sheet']} location={hint['location']} text={hint['text']}")
+    else:
+        print("No unit evidence found; treated as level.")
+
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     df.to_csv(PROCESSED_PATH, index=False)
 
@@ -150,7 +179,7 @@ Columns:
 - risk_class: Risk class label from source (L/M/H). Missing values kept as-is.
 - platform: Platform label from source (e.g., ACA, AXN, MCS, AMD, ECR, CLY).
 - ead_type: EAD type code from source (e.g., A, B, C, D, Q). Missing values kept as-is.
-- concentration_level: Concentration level as provided in the source file (integer 1–4). Units not specified in the file.
+- concentration_level: Ordinal level as provided in the source file (integer 1–4). Units not specified in the file.
 - ead: Early afterdepolarization flag from source (0/1).
 - dd_fpdc: Numeric metric from source column ddFPDc. Units not specified in the file.
 - site: Site identifier from source (integer).
