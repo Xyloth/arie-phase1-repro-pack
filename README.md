@@ -1,5 +1,27 @@
 # ARIE
 
+## Repro Pack (Phase 1)
+Use this to regenerate the Phase 1 evidence artifacts (coverage tables, join summaries,
+concordance, mechanistic plausibility, and trust-policy outputs).
+
+### Python
+- Required: Python `3.10`
+
+### Install
+```bash
+python -m venv .venv
+./.venv/bin/pip install -r requirements.txt
+```
+
+### Run
+```bash
+./.venv/bin/python scripts/repro_pack.py
+```
+
+### Outputs
+- Manifest with hashes/provenance: `results/repro_manifest.json`
+- Repro appendix doc: `reports/reproducibility_appendix.md`
+
 ## Data
 We start with the CiPA Myocyte Validation Study dataset (Blinova et al., 2018) from the CiPA project website.
 

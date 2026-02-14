@@ -8,6 +8,16 @@ import json
 
 from arie.mechanistic_multichannel_features import JOIN_SUMMARY_PATH, build_and_write
 
+CHANNELS = [
+    "hERG",
+    "Nav1.5_peak",
+    "Nav1.5_late",
+    "Cav1.2",
+    "IKs",
+    "IK1",
+    "Kv4.3",
+]
+
 
 def _print_summary() -> None:
     if not JOIN_SUMMARY_PATH.exists():
@@ -17,14 +27,17 @@ def _print_summary() -> None:
     coverage = summary.get("coverage", {})
     source_counts = summary.get("source_selection_counts", {})
     concordance = summary.get("concordance_overlap_counts", {})
+    channels = summary.get("channels", CHANNELS)
 
     print("Coverage per channel:")
-    for channel, info in coverage.items():
-        print(f"- {channel}: {info.get('present')}/28")
+    for channel in channels:
+        info = coverage.get(channel, {})
+        print(f"- {channel}: {info.get('present', 0)}/28")
 
     print("\nChosen-source distribution per channel:")
-    for channel, counts in source_counts.items():
-        counts_str = ", ".join(f"{k}={v}" for k, v in sorted(counts.items()))
+    for channel in channels:
+        counts = source_counts.get(channel, {})
+        counts_str = ", ".join(f"{k}={v}" for k, v in sorted(counts.items())) if counts else "none"
         print(f"- {channel}: {counts_str}")
 
     print("\nConcordance overlap counts:")
@@ -34,6 +47,11 @@ def _print_summary() -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Accepted for CLI compatibility; build always regenerates outputs.",
+    )
     parser.add_argument(
         "--print-summary",
         action="store_true",

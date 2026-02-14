@@ -1,11 +1,42 @@
 .venv/
 __pycache__/
 *.pyc
-data/
-results/
-figures/
 *.egg-info/
 .DS_Store
 
-# Local research PDFs (do not commit)
+# Root-level PDFs should never be tracked
+/*.pdf
+
+# Manual PDF extraction text (local working files)
+/Crumb_Extraction.txt
+/crumb_extraction.txt
+/*_extraction*.txt
+/raw/*_extraction*.txt
+
+# Unrelated local notes
+/Rethinking Toxicology NAMs Update.txt
+
+# Data + artifacts
+data/raw/
+data/cache/
+data/processed/
+results/
+figures/
+
+# Research documents and large local files
 *.pdf
+*.ppt
+*.pptx
+*.doc
+*.docx
+*.zip
+*.tar
+*.tar.gz
+
+# Local secrets
+.env
+.env.*
+*.pem
+*.key
+*.token
+secrets*

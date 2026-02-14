@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this repository, please cite it as below."
+title: "ARIE: Cardiac Safety Digital Twin (Phase 1 Reproducibility Pack)"
+version: "0.1.0"
+date-released: 2026-02-14
+authors:
+  - name: "XYFLOW Innovations LLC"
+license: "MIT"
+keywords:
+  - CiPA
+  - cardiac safety
+  - mechanistic modeling
+  - uncertainty quantification
+  - NAMs
+abstract: >-
+  Reproducible pipeline for CiPA-aligned data ingestion, mechanistic feature generation,
+  calibration/trust-policy evaluation, and abstention analysis.
